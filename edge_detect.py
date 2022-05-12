@@ -24,26 +24,29 @@ def edge_detect(image):
     #cv2.waitKey(0)
     return tight
 
+def find_side_pix(side, image):
+    y,x = image.shape
+    
+    if side == 'L':
+        compare = x
+        for i in range(0,y):
+            for j in range(0,x):
+                if test[i][j] == 255:
+                    if j < compare:
+                        compare = j
+                        break
+    else:
+        compare = 0
+        for i in range(0,y):
+            for j in range(0,x):
+                if test[i][j] == 255:
+                    if j > compare:
+                        compare = j
+    return compare
+
 image = cv2.imread('ball.jpg')
 test = edge_detect(image)
 print(test.shape)
-y,x = test.shape
-lowest = x
-highest = 0
-for i in range(0,y):
-    for j in range(0,x):
-        if test[i][j] == 255:
-            if j < lowest:
-                lowest = j
-                break
-
-for i in range(0,y):
-    for j in range(0,x):
-        if test[i][j] == 255:
-            if j > highest:
-                highest = j
-
-print(lowest)
-print(highest)
+l_pix = find_side_pix('L', test)
 cv2.imshow("Test", test)
 cv2.waitKey(0)
