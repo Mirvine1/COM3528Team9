@@ -1,6 +1,9 @@
 import cv2
+import numpy as np
 
 def edge_detect(image):
+
+
     # load the image, convert it to grayscale, and blur it slightly
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -15,13 +18,32 @@ def edge_detect(image):
     tight = cv2.Canny(blurred, 240, 250, L2gradient=True)
 
     # show the output Canny edge maps
-    cv2.imshow("Wide Edge Map", wide)
-    cv2.imshow("Mid Edge Map", mid)
-    cv2.imshow("Tight Edge Map", tight)
-    cv2.waitKey(0)
+    #cv2.imshow("Wide Edge Map", wide)
+    #cv2.imshow("Mid Edge Map", mid)
+    #cv2.imshow("Tight Edge Map", tight)
+    #cv2.waitKey(0)
     return tight
 
-image = cv2.imread('blob.png')
+image = cv2.imread('ball.jpg')
 test = edge_detect(image)
+print(test.shape)
+y,x = test.shape
+lowest = x
+highest = 0
+for i in range(0,y):
+    for j in range(0,x):
+        if test[i][j] == 255:
+            if j < lowest:
+                lowest = j
+                break
+
+for i in range(0,y):
+    for j in range(0,x):
+        if test[i][j] == 255:
+            if j > highest:
+                highest = j
+
+print(lowest)
+print(highest)
 cv2.imshow("Test", test)
 cv2.waitKey(0)
