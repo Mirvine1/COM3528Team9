@@ -1,16 +1,17 @@
-
 #!/usr/bin/env python3
 """
 This script makes MiRo look for a blue ball and kick it
 The code was tested for Python 2 and 3
 For Python 2 you might need to change the shebang line to
+
 #!/usr/bin/env python
 """
 # Imports
 ##########################
 import os
 from math import radians
-from re import X  # This is used to reset the head pose
+from re import X
+from turtle import forward  # This is used to reset the head pose
 import numpy as np  # Numerical Analysis library
 import cv2  # Computer Vision library
 
@@ -106,13 +107,13 @@ class MiRoClient:
             # Ignore corrupted frames
             pass
     def callback_sonar(self, ros_range):
-        self.range = ros_range
+        self.range = ros_range.range
 
 
     def __init__(self):
         # Initialise a new ROS node to communicate with MiRo
         if not self.NODE_EXISTS:
-            rospy.init_node("kick_blue_ball", anonymous=True)
+            rospy.init_node("mainloop", anonymous=True)
         # Give it some time to make sure everything is initialised
         rospy.sleep(2.0)
         # Initialise CV Bridge
@@ -179,43 +180,52 @@ class MiRoClient:
         print("Radar searching")
         self.drive(0,0)
 
-        self.kin_joints.position = [0.0, 8.0, 0.0, 8.0]
+        self.kin_joints.position = [0.0,  radians(-8.0), 0.0,  radians(8.0)]
         self.pub_kin.publish(self.kin_joints)
 
         for _ in range(40):
             rospy.sleep(self.TICK)
-        for i in range(0, 55.0, 5):
-            self.kin_joints.position = [0.0, 8.0, i, 8.0]
+            print('sleep1')
+        for i in range(0, 55, 5):
+            self.kin_joints.position = [0.0,  radians(8.0),  radians(i),  radians(8.0)]
             self.pub_kin.publish(self.kin_joints)
+            print('sleep2')
             for _ in range(20):
                 rospy.sleep(self.TICK)
             if self.range > 0.2:
                 direction = 0 
+                print('break1')
                 break
-            elif i == 55.0:
-                self.kin_joints.position = [0.0, 8.0, 0.0, 8.0]
+            elif i == 55:
+                self.kin_joints.position = [0.0, radians(8.0), 0.0, radians(8.0)]
                 self.pub_kin.publish(self.kin_joints)
                 for _ in range(40):
                     rospy.sleep(self.TICK)
+                    print('sleep3')
 
-                for i in range(0, 55.0, 5):
-                    self.kin_joints.position = [0.0, 8.0, -i, 8.0]
+                for i in range(0, 55, 5):
+                    self.kin_joints.position = [0.0, radians(8.0), radians(-i), radians(8.0)]
                     self.pub_kin.publish(self.kin_joints)
                     for _ in range(20):
                         rospy.sleep(self.TICK)
+                        print('sleep4')
                     if self.range > 0.2:
                         direction = 1
+                        print('break2')
                         break
         if direction == 0:
             self.drive(0.2,-0.2)
             for _ in range(40):
                 rospy.sleep(self.TICK)
-            self.drive(0,0)                    
+            self.drive(0,0)                 
         if direction == 1:
             self.drive(-0.2,0.2)
             for _ in range(40):
                 rospy.sleep(self.TICK)
-            self.drive(0,0)   
+            self.drive(0,0)
+    
+    def forward(self):
+        self.drive(0.4,0.4)
 
     def loop(self):
         """
@@ -226,26 +236,25 @@ class MiRoClient:
         self.counter = 0
         # This switch loops through MiRo behaviours:
         # Find ball, lock on to the ball and kick ball
-        self.status_code = 0
         while not rospy.core.is_shutdown():
 
             if self.range < 0.1:
+                print('move_nack')
                 self.move_back()
             
             # Detect range
-            elif self.range < 0.5 and self.status_code == 1:
+            elif self.range < 0.5:
                 self.radar_search()
-                self.status_code = 2
             
             # orient and move forward
-            elif self.status_code == 2:
+            elif self.range >= 0.5:
+                print('move forward')
                 self.forward()
-                self.status_code = 0
-
-            # Fall back
-            else:
-                self.status_code = 1
 
             # Yield
             self.counter += 1
             rospy.sleep(self.TICK)
+
+if __name__ == "__main__":
+    main = MiRoClient()  # Instantiate class
+    main.loop()  # Run the main control loop
