@@ -24,29 +24,33 @@ def edge_detect(image):
     #cv2.waitKey(0)
     return tight
 
-def find_side_pix(side, image):
+def find_side(image):
     y,x = image.shape
-    
-    if side == 'L':
-        compare = x
-        for i in range(0,y):
-            for j in range(0,x):
-                if test[i][j] == 255:
-                    if j < compare:
-                        compare = j
-                        break
+    compare_x = x
+    for i in range(0,y):
+        for j in range(0,x):
+            if test[i][j] == 255:
+                if j < compare_x:
+                    compare_x = j
+                    break
+    compare_y = 0
+    for i in range(0,y):
+        for j in range(0,x):
+            if test[i][j] == 255:
+                if j > compare_y:
+                    compare_y = j
+    compare_y = x - compare_y
+    diff = compare_x - compare_y
+    if diff < 0:
+        direction = 'R'
     else:
-        compare = 0
-        for i in range(0,y):
-            for j in range(0,x):
-                if test[i][j] == 255:
-                    if j > compare:
-                        compare = j
-    return compare
+        direction = 'L'
+    return direction
 
 image = cv2.imread('ball.jpg')
 test = edge_detect(image)
 print(test.shape)
-l_pix = find_side_pix('L', test)
+test2 = find_side(test)
+print(test2)
 cv2.imshow("Test", test)
 cv2.waitKey(0)
