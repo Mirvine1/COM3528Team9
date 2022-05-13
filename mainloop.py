@@ -14,7 +14,7 @@ from re import X
 from turtle import forward  # This is used to reset the head pose
 import numpy as np  # Numerical Analysis library
 import cv2  # Computer Vision library
-
+import time
 import rospy  # ROS Python interface
 from cv_bridge import CvBridge, CvBridgeError  # ROS -> OpenCV converter
 from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
@@ -180,49 +180,51 @@ class MiRoClient:
         print("Radar searching")
         self.drive(0,0)
 
-        self.kin_joints.position = [0.0,  radians(-8.0), 0.0,  radians(8.0)]
+        self.kin_joints.position = [0.0,  radians(6.0), 0.0,  radians(-22.0)]
         self.pub_kin.publish(self.kin_joints)
 
-        for _ in range(40):
-            rospy.sleep(self.TICK)
-            print('sleep1')
-        for i in range(0, 55, 5):
-            self.kin_joints.position = [0.0,  radians(8.0),  radians(i),  radians(8.0)]
+        time.sleep(2)
+        for i in range(0, 60, 5):
+            self.kin_joints.position = [0.0,  radians(6.0),  radians(i),  radians(-22.0)]
             self.pub_kin.publish(self.kin_joints)
+            print(i)
+            print(self.range)
             print('sleep2')
-            for _ in range(20):
-                rospy.sleep(self.TICK)
-            if self.range > 0.2:
+            time.sleep(2)
+            print(self.range)
+            if self.range > 0.3:
+                print(self.range)
                 direction = 0 
                 print('break1')
                 break
             elif i == 55:
-                self.kin_joints.position = [0.0, radians(8.0), 0.0, radians(8.0)]
+                self.kin_joints.position = [0.0, radians(6.0), 0.0, radians(-22.0)]
                 self.pub_kin.publish(self.kin_joints)
-                for _ in range(40):
-                    rospy.sleep(self.TICK)
-                    print('sleep3')
+                time.sleep(2)
+                print('sleep3')
 
                 for i in range(0, 55, 5):
-                    self.kin_joints.position = [0.0, radians(8.0), radians(-i), radians(8.0)]
+                    self.kin_joints.position = [0.0, radians(6.0), radians(-i), radians(-22.0)]
                     self.pub_kin.publish(self.kin_joints)
-                    for _ in range(20):
-                        rospy.sleep(self.TICK)
-                        print('sleep4')
+                    time.sleep(2)
+                    print('sleep4')
                     if self.range > 0.2:
                         direction = 1
                         print('break2')
                         break
+
         if direction == 0:
-            self.drive(0.2,-0.2)
+            self.drive(-0.2,0.2)
             for _ in range(40):
                 rospy.sleep(self.TICK)
             self.drive(0,0)                 
         if direction == 1:
-            self.drive(-0.2,0.2)
+            self.drive(0.2,-0.2)
             for _ in range(40):
                 rospy.sleep(self.TICK)
             self.drive(0,0)
+        else:
+                self.move_back()
     
     def forward(self):
         self.drive(0.4,0.4)
@@ -243,12 +245,12 @@ class MiRoClient:
                 self.move_back()
             
             # Detect range
-            elif self.range < 0.5:
+            elif self.range < 0.3:
                 self.radar_search()
             
             # orient and move forward
-            elif self.range >= 0.5:
-                print('move forward')
+            elif self.range >= 0.3:
+                
                 self.forward()
 
             # Yield
