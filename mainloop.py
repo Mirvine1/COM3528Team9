@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-This script makes MiRo look for a blue ball and kick it
-The code was tested for Python 2 and 3
-For Python 2 you might need to change the shebang line to
-
-#!/usr/bin/env python
+This script has been adapted from and heavily inspired by the kick_blue_ball.py script made for
+module COM3528 by T.Prescott, A. Lucas et al for the University of Sheffield. Produced for assessment
+for Team 9, 2022. The contributors to this script were Matthew Irvine, Henry Wilson and Shuochen Xie.
 """
 # Imports
 ##########################
@@ -37,8 +35,6 @@ class MiRoClient:
     """
     TICK = 0.02  # This is the update interval for the main control loop in secs
     CAM_FREQ = 1  # Number of ticks before camera gets a new frame, increase in case of network lag
-    SLOW = 0.1  # Radial speed when turning on the spot (rad/s)
-    FAST = 0.4  # Linear speed when kicking the ball (m/s)
     DEBUG = False  # Set to True to enable debug views of the cameras
     ##NOTE The following option is relevant in MiRoCODE
     NODE_EXISTS = False  # Disables (True) / Enables (False) rospy.init_node
@@ -49,7 +45,7 @@ class MiRoClient:
         """
         self.kin_joints = JointState()  # Prepare the empty message
         self.kin_joints.name = ["tilt", "lift", "yaw", "pitch"]
-        self.kin_joints.position = [0.0, radians(34.0), 0.0, 0.0]
+        self.kin_joints.position = [0.0,  radians(6.0),  0.0,  radians(8.0)]
         t = 0
         while not rospy.core.is_shutdown():  # Check ROS is running
             # Publish state to neck servos for 1 sec
@@ -94,11 +90,11 @@ class MiRoClient:
             # Convert compressed ROS image to raw CV image
             image = self.image_converter.compressed_imgmsg_to_cv2(ros_image, "rgb8")
             # Convert from OpenCV's default BGR to RGB
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             # Store image as class attribute for further use
             self.input_camera[index] = image
             # Get image dimensions
-            self.frame_height, self.frame_width, channels = image.shape
+            self.frame_height, self.frame_width = image.shape
             self.x_centre = self.frame_width / 2.0
             self.y_centre = self.frame_height / 2.0
             # Raise the flag: A new frame is available for processing
@@ -108,7 +104,15 @@ class MiRoClient:
             pass
     def callback_sonar(self, ros_range):
         self.range = ros_range.range
+    
+    def callback_head(self, sensors):
+        self.head_touch = sensors
+    
+    def callback_body(self,sensors):
+        self.body_touch = sensors
 
+    def callback_joints(self,sensors):
+        self.joints = sensors
 
     def __init__(self):
         # Initialise a new ROS node to communicate with MiRo
@@ -143,6 +147,30 @@ class MiRoClient:
             queue_size=1,
             tcp_nodelay=True,
         )
+        # Create new subscriber to recieve touch data with attached callback
+        self.sub_touch_body = rospy.Subscriber(
+            topic_base_name + "/sensors/touch_body",
+            UInt16,
+            self.callback_body,
+            queue_size=1,
+            tcp_nodelay=True,
+        )
+        # Create new subscriber to recieve touch data with attached callback
+        self.sub_touch_head = rospy.Subscriber(
+            topic_base_name + "/sensors/touch_head",
+            UInt16,
+            self.callback_head,
+            queue_size=1,
+            tcp_nodelay=True,
+        )
+        # Create new subscriber to recieve kinematic data with attached callback
+        self.sub_touch_head = rospy.Subscriber(
+            topic_base_name + "/sensors/kinematic_joints",
+            JointState,
+            self.callback_joints,
+            queue_size=1,
+            tcp_nodelay=True,
+        )
         # Create a new publisher to send velocity commands to the robot
         self.vel_pub = rospy.Publisher(
             topic_base_name + "/control/cmd_vel", TwistStamped, queue_size=0
@@ -153,6 +181,8 @@ class MiRoClient:
         )
         # Create handle to store images
         self.input_camera = [None, None]
+
+        self.edge = [None, None]
         # New frame notification
         self.new_frame = [False, False]
         # Create variable to store a list of ball's x, y, and r values for each camera
@@ -166,95 +196,190 @@ class MiRoClient:
         # Move the head to default pose
         self.reset_head_pose()
 
-    def object_detection(self):
-        self.yes=True
+        self.tilt = 0
+        self.tilt_direc = 'L'
+        self.close = 0.05
+        self.medium = 0.2
+        self.left_pixel = [0,0]
+        self.right_pixel = [0,0]
 
     def move_back(self):
         print("Moving back")
-        self.drive(-0.2,-0.2)
-        for _ in range(40):
-            rospy.sleep(self.TICK)
-        self.drive(0,0)
+        self.drive(-0.2 + self.tilt/150,-0.2 - self.tilt/150)
 
-    def radar_search(self):
-        print("Radar searching")
-        self.drive(0,0)
+    def sonar_search(self):
 
-        self.kin_joints.position = [0.0,  radians(6.0), 0.0,  radians(-22.0)]
+        left_direction = False
+        right_direction = False
+        print("sonar searching")
+        self.drive(0,0)
+        self.kin_joints.position = [0.0,  radians(6.0), 0.0,  radians(8.0)]
         self.pub_kin.publish(self.kin_joints)
+        rospy.sleep(self.TICK*5)
 
-        time.sleep(2)
+        # Look for way round obstacle
         for i in range(0, 60, 5):
-            self.kin_joints.position = [0.0,  radians(6.0),  radians(i),  radians(-22.0)]
+            self.kin_joints.position = [0.0,  radians(6.0),  radians(i),  radians(8.0)]
+            self.pub_kin.publish(self.kin_joints)
+            print(i)
+            print(self.range)
+            print('sleep1')
+            time.sleep(0.2)
+            print(self.range)
+            if self.range > self.medium + 0.05:
+                print(self.range)
+                # Find way on the Left 
+                left_direction = True
+                print('break1')
+                self.tilt = i
+                break
+
+        for i in range(0, -60, -5):
+            self.kin_joints.position = [0.0,  radians(6.0),  radians(i),  radians(8.0)]
             self.pub_kin.publish(self.kin_joints)
             print(i)
             print(self.range)
             print('sleep2')
-            time.sleep(2)
+            time.sleep(0.2)
             print(self.range)
-            if self.range > 0.3:
+            if self.range > self.medium + 0.05:
                 print(self.range)
-                direction = 0 
-                print('break1')
+                # Find way on the right 
+                right_direction = True
+                print('break2')
+                self.tilt = i
                 break
-            elif i == 55:
-                self.kin_joints.position = [0.0, radians(6.0), 0.0, radians(-22.0)]
-                self.pub_kin.publish(self.kin_joints)
-                time.sleep(2)
-                print('sleep3')
 
-                for i in range(0, 55, 5):
-                    self.kin_joints.position = [0.0, radians(6.0), radians(-i), radians(-22.0)]
-                    self.pub_kin.publish(self.kin_joints)
-                    time.sleep(2)
-                    print('sleep4')
-                    if self.range > 0.2:
-                        direction = 1
-                        print('break2')
-                        break
+        if left_direction:
+                self.drive(-0.1 - abs(self.tilt)/300,0.1 + abs(self.tilt)/300)
+                for _ in range(40):
+                    rospy.sleep(self.TICK)    
 
-        if direction == 0:
-            self.drive(-0.2,0.2)
-            for _ in range(40):
-                rospy.sleep(self.TICK)
-            self.drive(0,0)                 
-        if direction == 1:
-            self.drive(0.2,-0.2)
-            for _ in range(40):
-                rospy.sleep(self.TICK)
-            self.drive(0,0)
+        elif right_direction:
+                self.drive(0.1 + abs(self.tilt)/300,-0.1 - abs(self.tilt)/300)
+                for _ in range(40):
+                    rospy.sleep(self.TICK)
+
         else:
-                self.move_back()
+            # no way forward on either side
+            self.tilt = 0
+            self.move_back()
+            rospy.sleep(self.TICK*2)
     
-    def forward(self):
+    def move(self):
         self.drive(0.4,0.4)
+
+
+    def edge_detect(self, image, index):
+        self.new_frame[index] = False
+        # load the image, convert it to grayscale, and blur it slightly
+        #gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        blurred = cv2.GaussianBlur(image, (5, 5), 0)
+        # show the original and blurred images
+        #cv2.imshow("Original", image)
+        #cv2.imshow("Blurred", blurred)
+
+        # compute a "wide", "mid-range", and "tight" threshold for the edges
+        # using the Canny edge detector
+        # wide = cv2.Canny(blurred, 10, 200, L2gradient=True)
+        # mid = cv2.Canny(blurred, 30, 150, L2gradient=True)
+        tight = cv2.Canny(blurred, 240, 250, L2gradient=True)
+
+        # show the output Canny edge maps
+        #cv2.imshow("Wide Edge Map", wide)
+        #cv2.imshow("Mid Edge Map", mid)
+        cv2.imshow("Tight Edge Map", tight)
+        #cv2.waitKey(0)
+        return tight
+
+    def find_side(self, image):
+        y,x = image.shape
+        compare_x = x
+        for i in range(0,y):
+            for j in range(0,x):
+                if image[i][j] == 255:
+                    if j < compare_x:
+                        compare_x = j
+                        break
+        compare_y = 0
+        for i in range(0,y):
+            for j in range(0,x):
+                if image[i][j] == 255:
+                    if j > compare_y:
+                        compare_y = j
+                        
+        compare_y = x - compare_y
+        diff = compare_x - compare_y
+        print(compare_y)
+        print(compare_x)
+        if diff < 0:
+            direction = 'R'
+        else:
+            direction = 'L'
+        return direction
+
+    def edge_search(self):
+        self.kin_joints.position = [0.0, radians(34.0), 0.0, 0.0]
+        self.pub_kin.publish(self.kin_joints)
+        rospy.sleep(self.TICK*50)
+        for index in range(2):  # For each camera (0 = left, 1 = right)
+            # Skip if there's no new image, in case the network is choking
+            if not self.new_frame[index]:
+                continue
+            image = self.input_camera[index]
+            # Run the detect ball procedure
+            self.edge[index] = self.edge_detect(image, index)
+        if self.find_side(self.edge[0]) == 'R' and self.find_side(self.edge[1]) == 'R':
+            self.drive(0.2, -0.2)
+            for _ in range(50):
+                rospy.sleep(self.TICK)  
+            print('chose right')
+
+        elif self.find_side(self.edge[0], 0) == 'L' and self.find_side(self.edge[1], 1) == 'L':
+            self.drive(-0.2, 0.2)
+            for _ in range(50):
+                rospy.sleep(self.TICK)  
+            print('chose left')
+        else:
+            self.sonar_search()
 
     def loop(self):
         """
         Main control loop
         """
         print("MiRo is walking forward, press CTRL+C to halt...")
-        # Main control loop iteration counter
-        self.counter = 0
-        # This switch loops through MiRo behaviours:
-        # Find ball, lock on to the ball and kick ball
-        while not rospy.core.is_shutdown():
 
-            if self.range < 0.1:
-                print('move_nack')
+        # This switch loops through MiRo behaviours:
+        # 
+        while not rospy.core.is_shutdown():
+            
+            # Move back from close objects
+            if self.range < self.close:
+                print('move back')
                 self.move_back()
             
-            # Detect range
-            elif self.range < 0.3:
-                self.radar_search()
+            # Scan for a way round objects in medium range
+            elif self.range < self.medium:
+                #self.sonar_search()
+                self.edge_search()
             
-            # orient and move forward
-            elif self.range >= 0.3:
-                
-                self.forward()
+            # Perform typical movement and basic area scanning
+            elif self.range >= self.medium:
+                self.move()
+                self.kin_joints.position = [0.0,  radians(6.0),  radians(self.tilt),  radians(8.0)]
+                self.pub_kin.publish(self.kin_joints)
+                if self.tilt >= 40:
+                    self.tilt_direc = 'R'
+                if self.tilt <= -40:
+                    self.tilt_direc = 'L' 
+                if self.tilt_direc =='R':
+                    self.tilt -=5
+                if self.tilt_direc =='L':
+                    self.tilt +=5
+                rospy.sleep(self.TICK*3)
 
-            # Yield
-            self.counter += 1
+
+            # Incase not receiving valid range values
             rospy.sleep(self.TICK)
 
 if __name__ == "__main__":
