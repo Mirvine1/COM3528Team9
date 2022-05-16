@@ -335,7 +335,7 @@ class MiRoClient:
                 rospy.sleep(self.TICK)  
             print('chose right')
 
-        elif self.find_side(self.edge[0], 0) == 'L' and self.find_side(self.edge[1], 1) == 'L':
+        elif self.find_side(self.edge[0]) == 'L' and self.find_side(self.edge[1]) == 'L':
             self.drive(-0.2, 0.2)
             for _ in range(50):
                 rospy.sleep(self.TICK)  
