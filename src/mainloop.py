@@ -211,13 +211,13 @@ class MiRoClient:
 
         left_direction = False
         right_direction = False
-        print("sonar searching")
+        print("Radar searching")
         self.drive(0,0)
         self.kin_joints.position = [0.0,  radians(6.0), 0.0,  radians(8.0)]
         self.pub_kin.publish(self.kin_joints)
-        rospy.sleep(self.TICK*5)
 
-        # Look for way round obstacle
+
+        # Block by an obstacle, looking for a way
         for i in range(0, 60, 5):
             self.kin_joints.position = [0.0,  radians(6.0),  radians(i),  radians(8.0)]
             self.pub_kin.publish(self.kin_joints)
@@ -226,12 +226,11 @@ class MiRoClient:
             print('sleep1')
             time.sleep(0.2)
             print(self.range)
-            if self.range > self.medium + 0.05:
+            if self.range > 0.35:
                 print(self.range)
-                # Find way on the Left 
+                # Find way om the Left 
                 left_direction = True
                 print('break1')
-                self.tilt = i
                 break
 
         for i in range(0, -60, -5):
@@ -242,29 +241,28 @@ class MiRoClient:
             print('sleep2')
             time.sleep(0.2)
             print(self.range)
-            if self.range > self.medium + 0.05:
+            if self.range > 0.35:
                 print(self.range)
                 # Find way on the right 
                 right_direction = True
                 print('break2')
-                self.tilt = i
                 break
 
         if left_direction:
-                self.drive(-0.1 - abs(self.tilt)/300,0.1 + abs(self.tilt)/300)
-                for _ in range(40):
-                    rospy.sleep(self.TICK)    
-
-        elif right_direction:
-                self.drive(0.1 + abs(self.tilt)/300,-0.1 - abs(self.tilt)/300)
+                self.drive(-0.2,0.2)
                 for _ in range(40):
                     rospy.sleep(self.TICK)
+                self.drive(0,0)     
+
+        elif right_direction:
+                self.drive(0.2,-0.2)
+                for _ in range(40):
+                    rospy.sleep(self.TICK)
+                self.drive(0,0)
 
         else:
-            # no way forward on either side
-            self.tilt = 0
+            # no way on the both sides 
             self.move_back()
-            rospy.sleep(self.TICK*2)
     
     def move(self):
         self.drive(0.4,0.4)
@@ -335,7 +333,7 @@ class MiRoClient:
                 rospy.sleep(self.TICK)  
             print('chose right')
 
-        elif self.find_side(self.edge[0], 0) == 'L' and self.find_side(self.edge[1], 1) == 'L':
+        elif self.find_side(self.edge[0]) == 'L' and self.find_side(self.edge[1]) == 'L':
             self.drive(-0.2, 0.2)
             for _ in range(50):
                 rospy.sleep(self.TICK)  
